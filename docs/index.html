@@ -1,26 +1,24 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pl">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Trend Archive</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <main class="container">
-      <h1>Archiwum trendów</h1>
-      <p>Ostatnie zrzuty trendów (automatycznie raz dziennie).</p>
+<head>
+  <meta charset="UTF-8">
+  <title>Trend Archive</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <h1>📈 Archiwum trendów</h1>
+  <p>Ostatnie zrzuty trendów (aktualizowane automatycznie raz dziennie).</p>
 
-      <h2>Dostępne dni</h2>
-      <ul id="list">
-        <li>Ładowanie…</li>
-      </ul>
+  <p id="status">Ładowanie…</p>
+  <ul id="days"></ul>
 
-      <p class="note">
-        Kliknij datę, aby otworzyć plik Markdown z listą trendów dla danego dnia.
-      </p>
-    </main>
+  <footer>
+    <p>
+      Projekt open-source: 
+      <a href="https://github.com/applowiec/trend-archive" target="_blank">GitHub</a>
+    </p>
+  </footer>
 
-    <script src="script.js" defer></script>
-  </body>
+  <script src="./script.js"></script>
+</body>
 </html>
