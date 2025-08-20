@@ -1,8 +1,8 @@
-name: Update trends
+name: Update Trends
 
 on:
   schedule:
-    - cron: "0 6 * * *"     # codziennie 08:00 CET/CEST ≈ 06:00 UTC
+    - cron: "0 8 * * *"   # codziennie o 10:00 czasu PL (08:00 UTC)
   workflow_dispatch:
 
 permissions:
@@ -12,21 +12,33 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      - name: Run update
+      - name: Install requirements
+        run: pip install requests
+
+      - name: Run update script
         run: python scripts/update.py
 
-      - name: Commit & push
+      - name: Commit data/ (raw snapshots for repo)
         run: |
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/
-          git commit -m "auto: update $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
+          git commit -m "data: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" || echo "No changes to commit"
+          git push
+
+      - name: Publish data to docs/ for GitHub Pages
+        run: |
+          mkdir -p docs/data
+          cp -a data/* docs/data/
+          touch docs/.nojekyll
+          git add docs/data docs/.nojekyll
+          git commit -m "pages: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" || echo "No changes to commit"
           git push
