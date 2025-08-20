@@ -1,0 +1,32 @@
+name: Update trends
+
+on:
+  schedule:
+    - cron: "0 6 * * *"     # codziennie 08:00 CET/CEST ≈ 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Run update
+        run: python scripts/update.py
+
+      - name: Commit & push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git commit -m "auto: update $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
+          git push
