@@ -1,34 +1,37 @@
 (async () => {
-  const LIST_ID = "list";
-  const DATA_BASE = "data";              // na Pages katalog docs/ jest rootem, więc data/ jest pod /
-  const INDEX_URL = `${DATA_BASE}/index.json?ts=${Date.now()}`; // bez cache
+  // Baza dla GitHub Pages: /<user>.github.io/<repo>/
+  const BASE = `${location.origin}${location.pathname.replace(/\/$/, '')}`;
+  const dataURL = `${BASE}/data/index.json`;
 
-  const listEl = document.getElementById(LIST_ID);
-  if (!listEl) return;
+  const ul = document.getElementById('days');
+  const status = document.getElementById('status');
 
   try {
-    const res = await fetch(INDEX_URL, { cache: "no-store" });
+    const res = await fetch(dataURL, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const index = await res.json();      // spodziewamy się { "days": ["YYYY-MM-DD", ...] }
+    const days = await res.json();
 
-    // Pusta lista? pokaż info
-    if (!index?.days?.length) {
-      listEl.innerHTML = "<li>Brak danych (index.json nie zawiera dni).</li>";
+    if (!Array.isArray(days) || days.length === 0) {
+      status.textContent = 'Brak danych do wyświetlenia.';
       return;
     }
 
-    // Wyczyść i wyrenderuj
-    listEl.innerHTML = "";
-    [...index.days].sort().reverse().forEach((day) => {
-      const li = document.createElement("li");
-      const a = document.createElement("a");
-      a.href = `${DATA_BASE}/${day}.md`; // link bezpośrednio do Markdownu
-      a.textContent = day;
+    // najnowsze na górze
+    days.sort((a, b) => (a.date < b.date ? 1 : -1));
+
+    for (const d of days) {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = `${BASE}/data/${encodeURIComponent(d.file)}`;
+      a.textContent = `${d.date} — ${d.count} trendów`;
       li.appendChild(a);
-      listEl.appendChild(li);
-    });
-  } catch (err) {
-    console.error("Nie udało się wczytać index.json:", err);
-    listEl.innerHTML = `<li>Błąd ładowania index.json — sprawdź w konsoli i czy URL istnieje.</li>`;
+      ul.appendChild(li);
+    }
+
+    status.textContent = '';
+  } catch (e) {
+    status.textContent = `Nie udało się wczytać danych: ${e.message}`;
+    // podpowiedź debugowa
+    console.error('Fetch failed', { tried: dataURL, error: e });
   }
 })();
