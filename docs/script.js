@@ -1,37 +1,36 @@
-(async () => {
-  // Baza dla GitHub Pages: /<user>.github.io/<repo>/
-  const BASE = `${location.origin}${location.pathname.replace(/\/$/, '')}`;
-  const dataURL = `${BASE}/data/index.json`;
-
-  const ul = document.getElementById('days');
-  const status = document.getElementById('status');
+async function loadTrends() {
+  const statusEl = document.getElementById("status");
+  const listEl = document.getElementById("days");
 
   try {
-    const res = await fetch(dataURL, { cache: 'no-store' });
+    // Spróbuj wczytać index.json z /docs/data/
+    const res = await fetch("data/index.json");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const days = await res.json();
 
-    if (!Array.isArray(days) || days.length === 0) {
-      status.textContent = 'Brak danych do wyświetlenia.';
+    const snapshots = await res.json();
+
+    if (snapshots.length === 0) {
+      statusEl.textContent = "Brak dostępnych trendów.";
       return;
     }
 
-    // najnowsze na górze
-    days.sort((a, b) => (a.date < b.date ? 1 : -1));
+    statusEl.textContent = `Znaleziono ${snapshots.length} snapshotów:`;
 
-    for (const d of days) {
-      const li = document.createElement('li');
-      const a = document.createElement('a');
-      a.href = `${BASE}/data/${encodeURIComponent(d.file)}`;
-      a.textContent = `${d.date} — ${d.count} trendów`;
+    snapshots.forEach(snap => {
+      const li = document.createElement("li");
+
+      const a = document.createElement("a");
+      a.href = `data/${snap.file}`;
+      a.textContent = `${snap.date} — ${snap.count} trendów (${snap.source})`;
+
       li.appendChild(a);
-      ul.appendChild(li);
-    }
-
-    status.textContent = '';
-  } catch (e) {
-    status.textContent = `Nie udało się wczytać danych: ${e.message}`;
-    // podpowiedź debugowa
-    console.error('Fetch failed', { tried: dataURL, error: e });
+      listEl.appendChild(li);
+    });
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = "Błąd ładowania danych trendów.";
   }
-})();
+}
+
+// uruchom po załadowaniu strony
+document.addEventListener("DOMContentLoaded", loadTrends);
