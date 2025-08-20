@@ -1,17 +1,26 @@
 <!doctype html>
 <html lang="pl">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Archiwum trendów</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <main>
-    <h1>Archiwum trendów</h1>
-    <p>Ostatnie zrzuty trendów (automatycznie, raz dziennie):</p>
-    <ul id="list"></ul>
-  </main>
-  <script src="script.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trend Archive</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Archiwum trendów</h1>
+      <p>Ostatnie zrzuty trendów (automatycznie raz dziennie).</p>
+
+      <h2>Dostępne dni</h2>
+      <ul id="list">
+        <li>Ładowanie…</li>
+      </ul>
+
+      <p class="note">
+        Kliknij datę, aby otworzyć plik Markdown z listą trendów dla danego dnia.
+      </p>
+    </main>
+
+    <script src="script.js" defer></script>
+  </body>
 </html>
