@@ -1,161 +1,177 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-Trend Archive — dzienny snapshot trendów Google (PL)
-
-- Pobiera dzienne "Trending Searches" dla Polski (pytrends.trending_searches pn='poland').
-- Zapisuje:
-    * data/YYYY-MM-DD.md         — lista trendów (Markdown)
-    * data/index.json            — indeks dla frontu (docs/)
-- Projekt zakłada, że workflow skopiuje data/* do docs/data/ (patrz .github/workflows/update.yml).
-
-Autor: applowiec + GPT
-"""
-
-from __future__ import annotations
 import os
-import json
 import sys
+import json
 import time
-import traceback
-from typing import List, Tuple, Dict
-from datetime import datetime, timezone
+import datetime as dt
+from typing import List, Tuple
 
-# === KONFIG ===
-DATA_DIR: str = "data"
-INDEX_FILE: str = os.path.join(DATA_DIR, "index.json")
-SOURCE_NAME: str = "google-trends(PL)"
-MAX_ITEMS: int = 20  # ile pozycji maksymalnie w Markdownie
+import requests
+from pytrends.request import TrendReq
 
-# === UTYLITKI ===
-def ensure_dir(path: str) -> None:
-    os.makedirs(path, exist_ok=True)
+# ------- konfiguracja -------
+DATA_DIR = "data"
+INDEX_FILE = os.path.join(DATA_DIR, "index.json")
+SOURCE_NAME = "google-trends(PL)"
+MAX_ITEMS = 20  # utnijmy listy żeby były krótkie i stabilne
 
+# ------- utilsy -------
 def now_dates() -> Tuple[str, str]:
-    """
-    Zwraca:
-      - date_slug: YYYY-MM-DD (w UTC)
-      - human_ts:  2025-08-20 HH:MM:SS UTC
-    """
-    now_utc = datetime.now(timezone.utc)
-    return now_utc.strftime("%Y-%m-%d"), now_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
+    """Zwraca (date_slug, human_ts) w strefie Europy/Środkowej."""
+    # użyjemy czasu UTC + info o strefie dla przejrzystości
+    ts = dt.datetime.utcnow()
+    date_slug = ts.strftime("%Y-%m-%d")
+    human = ts.strftime("%Y-%m-%d %H:%M:%S UTC")
+    return date_slug, human
 
-def load_index(path: str) -> List[Dict]:
+def ensure_dirs():
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+def load_index(path: str) -> List[dict]:
     if not os.path.exists(path):
         return []
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
-        print(f"[WARN] Nie udało się wczytać {path}, zaczynam od pustej listy.", file=sys.stderr)
         return []
 
-def save_index(path: str, data: List[Dict]) -> None:
-    ensure_dir(os.path.dirname(path))
+def save_index(path: str, data: List[dict]) -> None:
+    # sort malejąco po dacie (string YYYY-MM-DD sortuje się leksykograficznie)
+    data_sorted = sorted(data, key=lambda x: x.get("date", ""), reverse=True)
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(data_sorted, f, ensure_ascii=False, indent=2)
 
 def write_markdown(date_slug: str, human_ts: str, items: List[str]) -> str:
-    """
-    Tworzy plik data/YYYY-MM-DD.md i zwraca jego ścieżkę względną.
-    """
-    ensure_dir(DATA_DIR)
+    """Zapisuje markdown dnia i zwraca relatywną ścieżkę pliku .md."""
     md_path = os.path.join(DATA_DIR, f"{date_slug}.md")
-    lines: List[str] = []
-    lines.append(f"# {date_slug} — snapshot trendów Google (PL)")
-    lines.append("")  # pusty wiersz
-
+    title = f"# {date_slug} — snapshot trendów Google (PL)\n"
     if items:
-        for t in items:
-            lines.append(f"- {t}")
+        body = "\n".join(f"- {s}" for s in items)
     else:
-        lines.append("_brak danych_")
-
-    lines.append("")  # newline na końcu
+        body = "_brak danych_"
+    content = f"{title}\n{body}\n"
     with open(md_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
+        f.write(content)
+    return md_path
 
-    return os.path.relpath(md_path).replace("\\", "/")
-
-# === POBIERANIE TRENDÓW ===
-def fetch_trends_pl(limit: int = MAX_ITEMS) -> Tuple[List[str], str]:
-    """
-    Zwraca (lista_trendów, pn_used). Wymusza dzienne „Trending Searches” dla Polski.
-    """
-    try:
-        from pytrends.request import TrendReq
-    except Exception:
-        print("[ERROR] Brak modułu 'pytrends' — dodaj go do requirements.txt i zainstaluj w CI.", file=sys.stderr)
-        return [], "error"
-
-    # hl = pl-PL, tz = offset (minuty) — 120 = CEST zimą 60; damy 120 aby nie przeszkadzało
-    pytrends = TrendReq(hl="pl-PL", tz=120)
-
-    # Najstabilniejsze: trending_searches(pn='poland')
-    tries = 3
-    for attempt in range(1, tries + 1):
-        try:
-            df = pytrends.trending_searches(pn="poland")
-            # DataFrame z kolumną 0
-            items = [str(x).strip() for x in df[0].tolist() if str(x).strip()]
-            return items[:limit], "poland"
-        except Exception as e:
-            print(f"[WARN] Próba {attempt}/{tries} — błąd Trends: {e}", file=sys.stderr)
-            time.sleep(2 * attempt)
-
-    # Ostateczny fallback — pusto
-    return [], "error"
-
-# === GŁÓWNY PRZEPŁYW ===
-def main() -> int:
-    date_slug, human_ts = now_dates()
-    print(f"== {human_ts} ==")
-
-    # 1) Pobierz trendy
-    items, pn_used = fetch_trends_pl(MAX_ITEMS)
-    count = len(items)
-    print(f"Pobrano {count} pozycji z {SOURCE_NAME}, pn='{pn_used}'.")
-
-    # 2) Zapisz Markdown
-    md_rel = write_markdown(date_slug, human_ts, items)
-    print(f"Zapisano Markdown: {md_rel}")
-
-    # 3) Zaktualizuj index.json
-    index = load_index(INDEX_FILE)
-
+def update_index(index_path: str, date_slug: str, count: int) -> List[dict]:
+    idx = load_index(index_path)
     entry = {
         "date": date_slug,
         "source": SOURCE_NAME,
         "count": count,
         "file": f"{date_slug}.md",
     }
-
-    # zaktualizuj istniejący dzień (jeśli był), inaczej dodaj
+    # podmień jeśli już istnieje wpis dla danej daty
     found = False
-    for i, e in enumerate(index):
+    for i, e in enumerate(idx):
         if e.get("date") == date_slug:
-            index[i] = entry
+            idx[i] = entry
             found = True
             break
     if not found:
-        index.append(entry)
+        idx.append(entry)
+    save_index(index_path, idx)
+    return idx
 
-    # posortuj malejąco po dacie (string YYYY-MM-DD sortuje się poprawnie)
-    index.sort(key=lambda e: e.get("date", ""), reverse=True)
-    save_index(INDEX_FILE, index)
-    print(f"Zaktualizowano indeks: {INDEX_FILE} (n={len(index)})")
+# ------- zbiory danych (3 podejścia) -------
+def fetch_trending_searches_pytrends(max_items: int) -> List[str]:
+    """pytrends.trending_searches(pn='poland')"""
+    try:
+        pt = TrendReq(hl="pl-PL", tz=120)  # tz=120 ≈ CET/CEST w minutach
+        df = pt.trending_searches(pn="poland")
+        items = [str(x).strip() for x in list(df[0]) if str(x).strip()]
+        return items[:max_items]
+    except Exception as e:
+        print(f"[warn] trending_searches failed: {e}")
+        return []
 
-    # 4) Podsumowanie (pojawia się w logach Actions)
-    print(f"[OK] {date_slug}: zapisano {count} trendów → {md_rel} + {INDEX_FILE}")
-    # status 0 zawsze — front pokaże „0” jeśli brak danych
+def fetch_today_searches_pytrends(max_items: int) -> List[str]:
+    """pytrends.today_searches — często działa, gdy trending_searches zwraca pustkę."""
+    try:
+        pt = TrendReq(hl="pl-PL", tz=120)
+        arr = pt.today_searches(pn="PL")  # w niektórych wersjach parametr pn ignorowany
+        items = [str(x).strip() for x in arr if str(x).strip()]
+        return items[:max_items]
+    except Exception as e:
+        print(f"[warn] today_searches failed: {e}")
+        return []
+
+def fetch_dailytrends_api(max_items: int) -> List[str]:
+    """
+    Publiczne endpointy Trends: dailytrends (na wczoraj/dziś). Nie wymaga auth.
+    Trzeba zrzucić 5 znaków prefixu )]}', i sparsować JSON.
+    """
+    url = "https://trends.google.com/trends/api/dailytrends"
+    params = {
+        "hl": "pl-PL",
+        "tz": "120",
+        "geo": "PL"
+    }
+    try:
+        r = requests.get(url, params=params, timeout=20)
+        r.raise_for_status()
+        text = r.text
+        # strip prefix
+        if text.startswith(")]}',"):
+            text = text[5:]
+        data = json.loads(text)
+        days = data.get("default", {}).get("trendingSearchesDays", [])
+        items: List[str] = []
+        for day in days:
+            for tr in day.get("trendingSearches", []):
+                title = tr.get("title", {}).get("query")
+                if title:
+                    items.append(title.strip())
+        # dedupe zachowując kolejność
+        seen = set()
+        deduped = []
+        for t in items:
+            if t not in seen:
+                seen.add(t)
+                deduped.append(t)
+        return deduped[:max_items]
+    except Exception as e:
+        print(f"[warn] dailytrends API failed: {e}")
+        return []
+
+def fetch_trends_pl(max_items: int) -> Tuple[List[str], str]:
+    """
+    Spróbuj kolejno 3 źródeł. Zwraca (lista, nazwa_źródła_użytego).
+    """
+    items = fetch_trending_searches_pytrends(max_items)
+    if items:
+        return items, "pytrends.trending_searches"
+
+    items = fetch_today_searches_pytrends(max_items)
+    if items:
+        return items, "pytrends.today_searches"
+
+    items = fetch_dailytrends_api(max_items)
+    if items:
+        return items, "dailytrends.api"
+
+    return [], "none"
+
+# ------- główny flow -------
+def main() -> int:
+    ensure_dirs()
+    date_slug, human_ts = now_dates()
+
+    print(f"== {human_ts} ==")
+    items, source_used = fetch_trends_pl(MAX_ITEMS)
+    print(f"Źródło: {source_used}  |  liczba pozycji: {len(items)}")
+
+    md_rel = write_markdown(date_slug, human_ts, items)
+    idx = update_index(INDEX_FILE, date_slug, len(items))
+    print(f"Zapisano: {md_rel}")
+    print(f"Zaktualizowano {INDEX_FILE} (n={len(idx)})")
+
+    # krótkie podsumowanie (pojawia się w Actions logach)
+    print(f"[ok] {date_slug}: {len(items)} pozycji | plik: {md_rel} | index: {INDEX_FILE}")
+    # jeżeli pusto – zwróć 0 (strona frontowa i tak pokaże „brak danych”)
     return 0
 
 if __name__ == "__main__":
-    try:
-        sys.exit(main())
-    except SystemExit as e:
-        raise
-    except Exception:
-        traceback.print_exc()
-        sys.exit(1)
+    sys.exit(main())
