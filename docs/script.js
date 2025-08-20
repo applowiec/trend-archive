@@ -1,24 +1,34 @@
-// docs/script.js
+(async () => {
+  const LIST_ID = "list";
+  const DATA_BASE = "data";              // na Pages katalog docs/ jest rootem, więc data/ jest pod /
+  const INDEX_URL = `${DATA_BASE}/index.json?ts=${Date.now()}`; // bez cache
 
-// Ustal bazową ścieżkę repo dla GitHub Pages: "/trend-archive"
-const parts = window.location.pathname.split('/').filter(Boolean);
-// dla adresów w stylu "/trend-archive/" parts[0] === "trend-archive"
-const base = parts.length ? `/${parts[0]}` : '';
+  const listEl = document.getElementById(LIST_ID);
+  if (!listEl) return;
 
-// Ładuj indeks z repo (działa lokalnie i na Pages)
-fetch(`${base}/data/index.json`)
-  .then(r => r.json())
-  .then(index => {
-    const list = document.getElementById('days');
-    list.innerHTML = '';
-    index.days.forEach(d => {
-      const li = document.createElement('li');
-      li.innerHTML = `<a href="${base}/data/${d.date}.md">${d.date}</a> — ${d.count} trendów`;
-      list.appendChild(li);
+  try {
+    const res = await fetch(INDEX_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const index = await res.json();      // spodziewamy się { "days": ["YYYY-MM-DD", ...] }
+
+    // Pusta lista? pokaż info
+    if (!index?.days?.length) {
+      listEl.innerHTML = "<li>Brak danych (index.json nie zawiera dni).</li>";
+      return;
+    }
+
+    // Wyczyść i wyrenderuj
+    listEl.innerHTML = "";
+    [...index.days].sort().reverse().forEach((day) => {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = `${DATA_BASE}/${day}.md`; // link bezpośrednio do Markdownu
+      a.textContent = day;
+      li.appendChild(a);
+      listEl.appendChild(li);
     });
-  })
-  .catch(err => {
-    console.error('Nie udało się wczytać index.json:', err);
-    document.getElementById('days').innerHTML =
-      '<li>Nie udało się wczytać danych. Spróbuj odświeżyć za minutę.</li>';
-  });
+  } catch (err) {
+    console.error("Nie udało się wczytać index.json:", err);
+    listEl.innerHTML = `<li>Błąd ładowania index.json — sprawdź w konsoli i czy URL istnieje.</li>`;
+  }
+})();
