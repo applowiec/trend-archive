@@ -1,69 +1,57 @@
 (async () => {
-  const listEl = document.getElementById('trends-list');
-  const detailsEl = document.getElementById('details');
-  const metaEl = document.getElementById('meta');
+  // Wyznacz bezpieczną bazę dla Projekt Pages: /<user>.github.io/<repo>/
+  // Działa lokalnie i na Pages.
+  const basePath = (function () {
+    const p = location.pathname;
+    // upewnij się, że kończy się na '/'
+    const dir = p.endsWith('/') ? p : p.replace(/[^/]+$/, '');
+    return dir;
+  })();
 
-  function setEmpty(msg) {
-    listEl.innerHTML = `<li class="empty">${msg}</li>`;
-    detailsEl.textContent = 'Wybierz snapshot z listy.';
-    metaEl.textContent = '';
+  // Zawsze celujemy w docs/data/index.json względem bieżącego katalogu
+  const dataUrl = new URL('./data/index.json', location.origin + basePath).toString();
+
+  const $tbody = document.getElementById('tbody');
+  const $last = document.getElementById('lastUpdated');
+
+  function renderEmpty(msg) {
+    $tbody.innerHTML = `<tr><td colspan="4" class="empty">${msg}</td></tr>`;
   }
 
-  async function fetchJson(url) {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    return res.json();
-  }
-
-  async function fetchText(url) {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    return res.text();
-  }
-
-  let index;
   try {
-    // Działa zarówno lokalnie jak i na Pages (docs/ jest rootem strony)
-    index = await fetchJson('./data/index.json');
-  } catch (e) {
-    console.error('Nie udało się pobrać index.json:', e);
-    setEmpty('Brak danych (index.json niedostępny).');
-    return;
-  }
+    const res = await fetch(dataUrl, { cache: 'no-store' });
+    if (!res.ok) {
+      renderEmpty(`Nie udało się pobrać danych (${res.status}).`);
+      return;
+    }
+    // index.json ma być tablicą obiektów: { date, source, count, file }
+    const items = await res.json();
+    if (!Array.isArray(items) || items.length === 0) {
+      renderEmpty('Brak wpisów w indeksie.');
+      return;
+    }
 
-  if (!Array.isArray(index) || index.length === 0) {
-    setEmpty('Brak snapshotów.');
-    return;
-  }
+    // sortuj malejąco po dacie (YYYY-MM-DD)
+    items.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
-  // posortuj malejąco po dacie (gdyby backend nie posortował)
-  index.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-
-  listEl.innerHTML = '';
-  index.forEach((item, i) => {
-    const li = document.createElement('li');
-    li.innerHTML = `<strong>${item.date}</strong> &mdash; ${item.count ?? '?'} pozycji`;
-    li.addEventListener('click', async () => {
-      [...listEl.children].forEach(c => c.classList.remove('active'));
-      li.classList.add('active');
-
-      metaEl.textContent = `Źródło: ${item.source || '—'} • Plik: ${item.file || '—'}`;
-
-      const mdPath = `./data/${item.file}`;
-      try {
-        const text = await fetchText(mdPath);
-        detailsEl.textContent = text;
-        detailsEl.classList.remove('empty');
-      } catch (e) {
-        console.error('Błąd pobrania pliku MD:', mdPath, e);
-        detailsEl.textContent = 'Nie udało się wczytać treści snapshotu.';
-        detailsEl.classList.add('empty');
-      }
+    const rows = items.map((it) => {
+      const fileHref = new URL(`./data/${it.file}`, location.origin + basePath).toString();
+      return `
+        <tr>
+          <td>${it.date}</td>
+          <td>${it.source ?? '-'}</td>
+          <td>${it.count ?? '-'}</td>
+          <td><a href="${fileHref}" target="_blank" rel="noopener">podgląd</a></td>
+        </tr>
+      `;
     });
-    if (i === 0) li.classList.add('active'); // preselect first
-    listEl.appendChild(li);
-  });
 
-  // auto-otwórz pierwszy
-  listEl.firstElementChild?.click();
+    $tbody.innerHTML = rows.join('');
+
+    // ostatnia data do pigułki
+    $last.textContent = items[0]?.date ?? '—';
+  } catch (err) {
+    console.error(err);
+    renderEmpty('Błąd podczas przetwarzania danych.');
+  }
 })();
