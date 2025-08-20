@@ -1,24 +1,120 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pl">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Trend Archive</title>
-  <link rel="stylesheet" href="./style.css">
+  <link rel="preload" href="style.css" as="style">
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --fg:#e5e7eb; --link:#60a5fa; --chip:#1f2937; }
+    html,body{height:100%}
+    body{
+      margin:0; font:16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: radial-gradient(1200px 1200px at 10% -10%, #1d2a5a 0, #0f172a 50%, #0b1227 100%);
+      color:var(--fg)
+    }
+    .wrap{max-width:980px;margin:0 auto;padding:40px 20px}
+    header{margin-bottom:24px}
+    .title{font-size:clamp(24px,3.2vw,34px);font-weight:800;letter-spacing:.2px}
+    .sub{color:var(--muted)}
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:16px; padding:18px 16px; margin:16px 0;
+      backdrop-filter: blur(4px);
+    }
+    .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .date{font-weight:700}
+    .pill{background:var(--chip);border:1px solid rgba(255,255,255,.08);padding:4px 10px;border-radius:999px;color:var(--muted)}
+    .actions{margin-left:auto;display:flex;gap:10px}
+    a.btn{
+      text-decoration:none;color:var(--fg);background:#0b1227;border:1px solid rgba(255,255,255,.12);
+      padding:6px 10px;border-radius:8px;transition:transform .12s ease, background .12s ease
+    }
+    a.btn:hover{transform:translateY(-1px);background:#0f162e}
+    .err{margin-top:18px;padding:12px;border:1px solid #ef4444;background:rgba(239,68,68,.1);border-radius:10px;color:#fecaca}
+    footer{margin-top:32px;color:var(--muted);font-size:14px}
+    .empty{opacity:.8}
+  </style>
 </head>
 <body>
-  <h1>📈 Archiwum trendów</h1>
-  <p>Ostatnie zrzuty trendów (aktualizowane automatycznie raz dziennie).</p>
+  <div class="wrap">
+    <header>
+      <div class="title">Trend Archive</div>
+      <div class="sub">Ostatnie zrzuty trendów (automatycznie, raz dziennie)</div>
+    </header>
 
-  <p id="status">Ładowanie…</p>
-  <ul id="days"></ul>
+    <main id="app">
+      <div class="card empty">Ładuję listę…</div>
+    </main>
 
-  <footer>
-    <p>
-      Projekt open-source: 
-      <a href="https://github.com/applowiec/trend-archive" target="_blank">GitHub</a>
-    </p>
-  </footer>
+    <footer>© <span id="y"></span> applowiec • hostowane na GitHub Pages</footer>
+  </div>
 
-  <script src="./script.js"></script>
+  <script>
+    document.getElementById('y').textContent = new Date().getFullYear();
+
+    // Spróbuj 1: /data/index.json (dla GitHub Pages, bo /docs jest rootem)
+    // Fallback: /docs/data/index.json (gdyby ktoś otwierał z innej bazy)
+    async function fetchIndex() {
+      const tries = [
+        'data/index.json',
+        'docs/data/index.json',
+        // ostateczny ratunek: bezwzględna ścieżka do raw danych (dopasowana do repo)
+        'https://raw.githubusercontent.com/applowiec/trend-archive/main/data/index.json'
+      ];
+      let lastErr;
+      for (const url of tries) {
+        try {
+          const res = await fetch(url, {cache:'no-store'});
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const json = await res.json();
+          return { json, from: url };
+        } catch (e) { lastErr = e; }
+      }
+      throw lastErr || new Error('Nieznany błąd pobierania');
+    }
+
+    function row(item, baseHref) {
+      const file = item.file || (item.date + '.md');
+      const href = baseHref + encodeURIComponent(file);
+      return `
+        <div class="card row">
+          <div class="date">📆 ${item.date}</div>
+          <div class="pill">źródło: ${item.source || 'n/a'}</div>
+          <div class="pill">liczba pozycji: ${item.count ?? '—'}</div>
+          <div class="actions">
+            <a class="btn" href="${href}">Podgląd</a>
+            <a class="btn" href="https://github.com/applowiec/trend-archive/blob/main/data/${encodeURIComponent(file)}">GitHub</a>
+          </div>
+        </div>`;
+    }
+
+    (async () => {
+      const app = document.getElementById('app');
+      try {
+        const { json, from } = await fetchIndex();
+
+        // Jeżeli poleciało z raw.githubusercontent.com, to podgląd trzeba brać też z raw:
+        const baseHref = from.includes('raw.githubusercontent.com')
+          ? 'https://raw.githubusercontent.com/applowiec/trend-archive/main/data/'
+          : 'data/';
+
+        if (!Array.isArray(json) || json.length === 0) {
+          app.innerHTML = '<div class="card empty">Brak danych do wyświetlenia.</div>';
+          return;
+        }
+
+        // najnowsze na górze
+        const list = [...json].sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+        app.innerHTML = list.map(x => row(x, baseHref)).join('');
+
+      } catch (err) {
+        app.innerHTML = `<div class="err"><b>Błąd ładowania danych</b><br>${String(err)}</div>`;
+        console.error(err);
+      }
+    })();
+  </script>
 </body>
 </html>
