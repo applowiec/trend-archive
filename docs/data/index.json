@@ -1,5 +1,11 @@
 [
   {
+    "date": "2025-12-02",
+    "source": "google-trends(PL)",
+    "count": 0,
+    "file": "2025-12-02.md"
+  },
+  {
     "date": "2025-12-01",
     "source": "google-trends(PL)",
     "count": 0,
