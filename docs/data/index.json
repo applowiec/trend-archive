@@ -1,5 +1,11 @@
 [
   {
+    "date": "2026-07-01",
+    "source": "google-trends(PL)",
+    "count": 0,
+    "file": "2026-07-01.md"
+  },
+  {
     "date": "2026-06-30",
     "source": "google-trends(PL)",
     "count": 0,
